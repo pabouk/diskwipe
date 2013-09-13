@@ -1,9 +1,14 @@
 #!/bin/sh
 
-bufsz=4m
-dev="$1"
-src=/dev/zero
-haspt=1		# the device has a partition table
+# sript for secure wiping of data from a disk
+# Vaclav Brozik
+# License GPL v3+
+
+bufsz=4m	# buffer size 4 MiB
+dev="$1"	# device to wipe
+src=/dev/zero	# source of wiping data
+haspt=1		# the device should have a partition table
+hassmart=1	# the device should support SMART
 
 if test ! -b "$dev" ; then
 	echo "Please provide a block device as a parameter. Exiting." >&2
@@ -14,20 +19,29 @@ if test ! -w "$dev" ; then
 	exit 1
 fi
 if grep "^$dev" /proc/mounts ; then
-	echo "The device is mounted. Exiting." >&2
-	exit 1
+	echo "The device is mounted as listed above. Exiting." >&2
+	#exit 1
 fi
 
 devsz=$(blockdev --getsize64 "$dev")
 
-echo "\n!!! Going to erase block device $dev of $devsz bytes !!!"
+echo "\n!!! Preparing to erase block device $dev of $devsz bytes !!!"
 echo "\n--- device information ---"
-smartctl -i "$dev" |
-	grep -E "^(Model Family|Device Model|Serial Number|Firmware Version|User Capacity|Sector Size|ATA Standard is)"
-echo "\n--- device partition table ---"
-parted "$dev" print
+if test "$hassmart" = 1 ; then
+	smartctl -i "$dev" |
+		grep -E "^(Model Family|Device Model|Serial Number|Firmware Version|User Capacity|Sector Size|ATA Standard is)"
+else
+	echo "Device does not support SMART."
+fi
+if test "$haspt" = 1 ; then
+	echo "\n--- device partition table ---"
+	parted "$dev" print
+else
+	echo "\n--- The device contains ---"
+	file -s "$dev"
+fi
 
-echo "\n??? ERASE ???"
+echo "\n--- ??? Really ERASE ??? ---"
 read -p "Type yes to proceed: " REPLY
 
 if test "$REPLY" = yes ; then

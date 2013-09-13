@@ -1,0 +1,43 @@
+#!/bin/sh
+
+bufsz=4m
+dev="$1"
+src=/dev/zero
+haspt=1		# the device has a partition table
+
+if test ! -b "$dev" ; then
+	echo "Please provide a block device as a parameter. Exiting." >&2
+	exit 1
+fi
+if test ! -w "$dev" ; then
+	echo "You must have a write access to the device. Exiting." >&2
+	exit 1
+fi
+if grep "^$dev" /proc/mounts ; then
+	echo "The device is mounted. Exiting." >&2
+	exit 1
+fi
+
+devsz=$(blockdev --getsize64 "$dev")
+
+echo "\n!!! Going to erase block device $dev of $devsz bytes !!!"
+echo "\n--- device information ---"
+smartctl -i "$dev" |
+	grep -E "^(Model Family|Device Model|Serial Number|Firmware Version|User Capacity|Sector Size|ATA Standard is)"
+echo "\n--- device partition table ---"
+parted "$dev" print
+
+echo "\n??? ERASE ???"
+read -p "Type yes to proceed: " REPLY
+
+if test "$REPLY" = yes ; then
+	echo "Erasing:\n"
+	pv -pterabW -s "$devsz" -B "$bufsz" "$src" >"$dev"
+	echo "pw exit status: $?"
+	blockdev --rereadpt "$dev"
+else
+	echo "Exiting.\n"
+	exit 0
+fi
+echo Done.
+
